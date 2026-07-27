@@ -1,0 +1,19 @@
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Editors and notebooks
+.vscode/
+.idea/
+.ipynb_checkpoints/
+
+# Generated USGS time-series data
+data/usgs_timeseries/*.csv
+
+# Allow small, intentionally created examples
+!data/usgs_timeseries/*_sample.csv
