@@ -201,19 +201,37 @@ Modify this file to add or remove stations.
 
 # Collaboration
 
-Before contributing, synchronize with the latest repository:
+To contribute to the project, first synchronize your local repository:
 
 ```bash
-git pull
+git switch main
+git pull --ff-only
 ```
 
-Commit your changes
+Create a new feature branch:
+
+```bash
+git switch -c feature/my-feature
+```
+
+After making your changes:
 
 ```bash
 git add .
 git commit -m "Describe your changes"
-git push
+git push -u origin feature/my-feature
 ```
+
+Open a Pull Request (PR) on GitHub to merge your branch into `main`.
+
+Before starting new work, make sure your local `main` branch is up to date:
+
+```bash
+git switch main
+git pull --ff-only
+```
+
+
 
 ---
 
