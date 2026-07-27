@@ -13,14 +13,25 @@ import requests
 # ---------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------
-PROJECT_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
-METADATA_FILE = PROJECT_DIR / "master_gauge_metadata.csv"
-OUTPUT_DIR = PROJECT_DIR / "data" / "usgs_timeseries"
+MASTER_METADATA_PATH = (
+    PROJECT_ROOT / "data" / "processed" / "master_gauge_metadata.csv"
+)
 
-LONG_OUTPUT_FILE = OUTPUT_DIR / "usgs_gauge_height_streamflow_long.csv"
-WIDE_OUTPUT_FILE = OUTPUT_DIR / "usgs_gauge_height_streamflow_wide.csv"
-SUMMARY_OUTPUT_FILE = OUTPUT_DIR / "usgs_download_summary.csv"
+TIMESERIES_DIR = PROJECT_ROOT / "data" / "raw" / "usgs" / "timeseries"
+
+LONG_OUTPUT_PATH = (
+    TIMESERIES_DIR / "usgs_gauge_height_streamflow_long.csv"
+)
+
+WIDE_OUTPUT_PATH = (
+    TIMESERIES_DIR / "usgs_gauge_height_streamflow_wide.csv"
+)
+
+SUMMARY_OUTPUT_PATH = (
+    TIMESERIES_DIR / "usgs_download_summary.csv"
+)
 
 
 # ---------------------------------------------------------------------
@@ -643,19 +654,23 @@ def print_data_summary(data: pd.DataFrame) -> None:
     print("\nDownloaded-data availability:")
     print(summary.to_string(index=False))
 
-
 def main() -> None:
-    OUTPUT_DIR.mkdir(
+    """Download USGS gauge observations and save project datasets."""
+
+    # Ensure the output directory exists before writing files.
+    TIMESERIES_DIR.mkdir(
         parents=True,
         exist_ok=True,
     )
 
-    gauges = load_selected_gauges(METADATA_FILE)
+    gauges = load_selected_gauges(
+        MASTER_METADATA_PATH
+    )
 
     data, request_summary = download_all_data(gauges)
 
     request_summary.to_csv(
-        SUMMARY_OUTPUT_FILE,
+        SUMMARY_OUTPUT_PATH,
         index=False,
     )
 
@@ -665,7 +680,7 @@ def main() -> None:
             "Check the dates, site selection, and parameter availability."
         )
         print(
-            f"Request summary saved to:\n{SUMMARY_OUTPUT_FILE}"
+            f"\nRequest summary saved to:\n{SUMMARY_OUTPUT_PATH}"
         )
         return
 
@@ -676,7 +691,11 @@ def main() -> None:
 
     data = (
         data.sort_values(
-            ["site_id", "datetime", "parameter_code"]
+            [
+                "site_id",
+                "datetime",
+                "parameter_code",
+            ]
         )
         .drop_duplicates(
             subset=[
@@ -690,24 +709,29 @@ def main() -> None:
     )
 
     data.to_csv(
-        LONG_OUTPUT_FILE,
+        LONG_OUTPUT_PATH,
         index=False,
     )
 
     wide = create_wide_table(data)
 
     wide.to_csv(
-        WIDE_OUTPUT_FILE,
+        WIDE_OUTPUT_PATH,
         index=False,
     )
 
     print_data_summary(data)
 
     print("\nSaved files:")
-    print(f"Long-format observations:\n{LONG_OUTPUT_FILE}")
-    print(f"\nWide-format observations:\n{WIDE_OUTPUT_FILE}")
-    print(f"\nRequest summary:\n{SUMMARY_OUTPUT_FILE}")
-
+    print(
+        f"\nLong-format observations:\n{LONG_OUTPUT_PATH}"
+    )
+    print(
+        f"\nWide-format observations:\n{WIDE_OUTPUT_PATH}"
+    )
+    print(
+        f"\nRequest summary:\n{SUMMARY_OUTPUT_PATH}"
+    )
 
 if __name__ == "__main__":
     main()
