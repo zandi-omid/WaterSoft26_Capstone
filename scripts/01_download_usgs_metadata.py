@@ -2,23 +2,37 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import requests
 import pandas as pd
+import requests
 
-PROJECT_DIR = Path(__file__).resolve().parent
 
-SITE_IDS = [
-    "08193000",
-    "08194000",
-    "08194500",
-    "08210000",
-    "08210100",
-    "08206900",
-    "08206600",
-    "08206700",
-    "08205500",
-    "08208000",
-]
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
+GAUGE_CONFIG_PATH = PROJECT_ROOT / "config" / "gauges.csv"
+OUTPUT_PATH = PROJECT_ROOT / "data" / "interim" / "usgs_gauge_metadata.csv"
+
+
+def load_site_ids(config_path: Path) -> list[str]:
+    """Load included USGS gauge identifiers from the project configuration."""
+
+    gauges = pd.read_csv(config_path, dtype={"site_id": str})
+
+    if "include" in gauges.columns:
+        include_mask = (
+            gauges["include"]
+            .astype(str)
+            .str.strip()
+            .str.lower()
+            .isin({"true", "1", "yes", "y"})
+        )
+        gauges = gauges.loc[include_mask]
+
+    site_ids = gauges["site_id"].dropna().astype(str).str.zfill(8).tolist()
+
+    if not site_ids:
+        raise ValueError(f"No included gauges were found in {config_path}")
+
+    return site_ids
 
 
 def get_usgs_site_metadata(site_ids: list[str]) -> pd.DataFrame:
@@ -43,6 +57,7 @@ def get_usgs_site_metadata(site_ids: list[str]) -> pd.DataFrame:
     geojson = response.json()
 
     rows = []
+
     for feature in geojson.get("features", []):
         properties = feature["properties"]
         longitude, latitude = feature["geometry"]["coordinates"]
@@ -72,12 +87,14 @@ def get_usgs_site_metadata(site_ids: list[str]) -> pd.DataFrame:
 
 
 def main() -> None:
-    metadata = get_usgs_site_metadata(SITE_IDS)
-    print(metadata)
-    metadata.to_csv(
-        PROJECT_DIR / "usgs_gauge_metadata.csv",
-        index=False,
-    )
+    site_ids = load_site_ids(GAUGE_CONFIG_PATH)
+    metadata = get_usgs_site_metadata(site_ids)
+
+    OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    metadata.to_csv(OUTPUT_PATH, index=False)
+
+    print(f"Downloaded metadata for {len(metadata)} gauges.")
+    print(f"Saved metadata to: {OUTPUT_PATH}")
 
 
 if __name__ == "__main__":

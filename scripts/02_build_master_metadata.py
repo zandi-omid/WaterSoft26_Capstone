@@ -1,17 +1,20 @@
 from __future__ import annotations
-
 from pathlib import Path
-
 import pandas as pd
-
 
 # ---------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------
-PROJECT_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+USGS_METADATA_PATH = (
+    PROJECT_ROOT / "data" / "interim" / "usgs_gauge_metadata.csv"
+)
 
-INPUT_FILE = PROJECT_DIR / "usgs_gauge_metadata.csv"
-OUTPUT_FILE = PROJECT_DIR / "master_gauge_metadata.csv"
+MASTER_METADATA_PATH = (
+    PROJECT_ROOT / "data" / "processed" / "master_gauge_metadata.csv"
+)
+INPUT_FILE = USGS_METADATA_PATH
+OUTPUT_FILE = MASTER_METADATA_PATH
 
 
 # ---------------------------------------------------------------------
@@ -353,16 +356,23 @@ def build_master_table(
         na_position="last",
     ).reset_index(drop=True)
 
-
 def main() -> None:
-    usgs_metadata = load_usgs_metadata(INPUT_FILE)
+    usgs_metadata = load_usgs_metadata(USGS_METADATA_PATH)
 
     master = build_master_table(
         usgs_metadata=usgs_metadata,
         noaa_records=NOAA_METADATA,
     )
 
-    master.to_csv(OUTPUT_FILE, index=False)
+    MASTER_METADATA_PATH.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    master.to_csv(
+        MASTER_METADATA_PATH,
+        index=False,
+    )
 
     pd.set_option("display.max_columns", None)
     pd.set_option("display.width", 240)
@@ -384,7 +394,10 @@ def main() -> None:
     print("\nMaster gauge metadata:")
     print(master[display_columns].to_string(index=False))
 
-    print(f"\nSaved master table to:\n{OUTPUT_FILE}")
+    print(
+        "\nSaved master table to:"
+        f"\n{MASTER_METADATA_PATH}"
+    )
 
 
 if __name__ == "__main__":
