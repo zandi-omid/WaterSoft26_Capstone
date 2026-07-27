@@ -1,11 +1,13 @@
 # WaterSoft 2026 Capstone
 
 This repository contains a reproducible data pipeline for collecting,
-organizing, and analyzing USGS stream-gauge observations together with
-project-specific NOAA flood-stage metadata.
+organizing, quality-controlling, and analyzing USGS stream-gauge observations
+together with project-specific NOAA flood-stage metadata.
 
-The current focus of the project is data preparation, quality control, and
-exploratory data analysis for hydrologic applications.
+The current focus of the project is data preparation, quality control,
+exploratory data analysis (EDA), and developing LSTM-based streamflow
+forecasting models for comparison with National Weather Service (NWS)
+forecast products.
 
 ---
 
@@ -15,13 +17,13 @@ exploratory data analysis for hydrologic applications.
 WaterSoft26_Capstone/
 │
 ├── config/
-│   └── gauges.csv                 # List of USGS gauges used in the project
+│   └── gauges.csv                     # List of USGS gauges used in the project
 │
 ├── data/
 │   ├── raw/
 │   │   ├── noaa/
 │   │   └── usgs/
-│   │       └── timeseries/         # Downloaded USGS observations
+│   │       └── timeseries/
 │   │
 │   ├── interim/
 │   │   └── usgs_gauge_metadata.csv
@@ -29,24 +31,21 @@ WaterSoft26_Capstone/
 │   ├── processed/
 │   │   └── master_gauge_metadata.csv
 │   │
-│   └── samples/                    # Small sample datasets
+│   └── samples/
 │
-├── docs/                           # Project documentation
+├── docs/
 │
 ├── notebooks/
-│   └── EDA.ipynb                   # Exploratory data analysis
+│   └── 01_EDA.ipynb
 │
 ├── scripts/
 │   ├── 01_download_usgs_metadata.py
 │   ├── 02_build_master_metadata.py
-│   └── 03_download_usgs_timeseries.py
+│   ├── 03_download_usgs_timeseries.py
+│   └── 04_fill_usgs_timeseries_gaps.py
 │
 ├── src/
-│   └── watersoft/
-│       └── __init__.py
-│
 ├── tests/
-│
 ├── .gitignore
 ├── requirements.txt
 └── README.md
@@ -72,7 +71,7 @@ python -m venv .venv
 source .venv/bin/activate
 ```
 
-Install dependencies:
+Install the required packages:
 
 ```bash
 python -m pip install -r requirements.txt
@@ -88,7 +87,7 @@ python -m pip install -r requirements.txt
 python scripts/01_download_usgs_metadata.py
 ```
 
-Output:
+Output
 
 ```text
 data/interim/usgs_gauge_metadata.csv
@@ -102,7 +101,7 @@ data/interim/usgs_gauge_metadata.csv
 python scripts/02_build_master_metadata.py
 ```
 
-Output:
+Output
 
 ```text
 data/processed/master_gauge_metadata.csv
@@ -116,7 +115,7 @@ data/processed/master_gauge_metadata.csv
 python scripts/03_download_usgs_timeseries.py
 ```
 
-Outputs:
+Outputs
 
 ```text
 data/raw/usgs/timeseries/
@@ -130,29 +129,50 @@ chunks using parallel requests.
 
 ---
 
+## Step 4 — Fill missing observations
+
+```bash
+python scripts/04_fill_usgs_timeseries_gaps.py
+```
+
+Outputs
+
+```text
+data/raw/usgs/timeseries/
+├── usgs_gauge_height_streamflow_long_filled.csv
+├── usgs_gauge_height_streamflow_wide_filled.csv
+└── usgs_gap_filling_summary.csv
+```
+
+The script fills the rare missing observations independently for each gauge
+using the nearest available observation in time while preserving the original
+downloaded datasets.
+
+---
+
 # Exploratory Data Analysis
 
-After the pipeline has completed, launch Jupyter:
+Launch Jupyter Lab
 
 ```bash
 jupyter lab
 ```
 
-Open:
+Open
 
 ```text
-notebooks/EDA.ipynb
+notebooks/01_EDA.ipynb
 ```
 
-The notebook reads the generated files from the `data/` directory and performs
-basic exploratory analyses, including:
+The notebook includes analyses such as
 
-- station metadata inspection
+- gauge metadata inspection
 - observation coverage
-- missing-value analysis
+- missing-value assessment
 - download summary
 - descriptive statistics
 - duplicate detection
+- visualization of streamflow and stage observations
 
 ---
 
@@ -161,50 +181,46 @@ basic exploratory analyses, including:
 | Directory | Description |
 |-----------|-------------|
 | `data/raw/` | Raw downloaded datasets |
-| `data/interim/` | Intermediate files created during processing |
-| `data/processed/` | Final processed datasets used by the project |
-| `data/samples/` | Small sample datasets for demonstrations and testing |
+| `data/interim/` | Intermediate processing products |
+| `data/processed/` | Final processed datasets |
+| `data/samples/` | Small example datasets |
 
 ---
 
 # Gauge Configuration
 
-The gauges used throughout the project are defined in
+The gauges used throughout the project are listed in
 
 ```text
 config/gauges.csv
 ```
 
-To add or remove gauges, simply edit this file.
+Modify this file to add or remove stations.
 
 ---
 
 # Collaboration
 
-Create a new branch before making changes:
+Before contributing, synchronize with the latest repository:
 
 ```bash
-git switch main
-git pull --ff-only
-git switch -c feature/my-feature
+git pull
 ```
 
-After making changes:
+Commit your changes
 
 ```bash
 git add .
 git commit -m "Describe your changes"
-git push -u origin feature/my-feature
+git push
 ```
-
-Then open a Pull Request into `main`.
 
 ---
 
 # Notes
 
-Large generated datasets are intentionally excluded from Git. Each collaborator
-should generate them locally by running the pipeline scripts.
+Large generated datasets are intentionally excluded from version control.
+Each collaborator should generate the datasets locally by running the pipeline.
 
-The `src/watersoft/` package is reserved for reusable Python modules as the
-project grows.
+The `src/` directory is reserved for reusable Python modules as the project
+continues to grow.
