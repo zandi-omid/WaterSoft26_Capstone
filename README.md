@@ -1,11 +1,13 @@
 <p align="center">
-  <img src="docs/assets/project-logo.jpg"
+  <img src="docs/assets/project_logo.jpg"
        alt="WaterSoftHack project logo"
        width="350">
 </p>
 
 <h1 align="center">WaterSoft 2026 Capstone</h1>
 
+
+![WaterSoftHack Logo](docs/assets/project_logo.jpg)
 This repository contains a reproducible data pipeline for collecting,
 organizing, quality-controlling, and analyzing USGS stream-gauge observations
 together with project-specific NOAA flood-stage metadata.
