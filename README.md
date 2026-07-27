@@ -6,8 +6,6 @@
 
 <h1 align="center">WaterSoft 2026 Capstone</h1>
 
-
-![WaterSoftHack Logo](docs/assets/project_logo.jpg)
 This repository contains a reproducible data pipeline for collecting,
 organizing, quality-controlling, and analyzing USGS stream-gauge observations
 together with project-specific NOAA flood-stage metadata.
