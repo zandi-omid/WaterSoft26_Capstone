@@ -20,4 +20,7 @@ data/processed/
 # Keep directory structure
 !data/raw/.gitkeep
 !data/interim/.gitkeep
-!data/processed/.gitkeepdocs/figures/
+!data/processed/.gitkeep
+
+# Generated figures
+docs/figures/
