@@ -33,15 +33,10 @@ Example: retrieve one event
 
 Requirements:
 
-    pip install \
-        pandas \
-        numpy \
-        xarray \
-        s3fs \
-        zarr \
-        dask \
-        distributed \
-        numcodecs
+    python -m pip install -r requirements.txt
+
+The project pins Zarr 2.x and NumPy 1.x because the current Xarray
+workflow and the rest of the scientific environment use those APIs.
 """
 
 from __future__ import annotations
@@ -716,20 +711,25 @@ def retrieve_nwm_retrospective(
         return frame
 
     finally:
-
-        dataset.close()
-
-        if filesystem._s3creator is not None:
-
-            s3fs.S3FileSystem.close_session(
-
-                filesystem.loop,
-
-                filesystem._s3creator,
-
+        # S3FS manages its asynchronous client with a finalizer.
+        # Private connection attributes differ between S3FS versions,
+        # so cleanup must not depend on `_s3creator` being present or
+        # mask an otherwise successful retrieval.
+        try:
+            dataset.close()
+        except Exception as exc:
+            print(
+                "Warning: could not close the NWM dataset "
+                f"cleanly: {exc}"
             )
 
-        filesystem.clear_instance_cache()
+        try:
+            filesystem.clear_instance_cache()
+        except Exception as exc:
+            print(
+                "Warning: could not clear the S3FS instance "
+                f"cache: {exc}"
+            )
             
 
 # ---------------------------------------------------------------------
