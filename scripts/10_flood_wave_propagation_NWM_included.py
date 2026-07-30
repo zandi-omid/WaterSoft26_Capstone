@@ -1304,7 +1304,73 @@ def plot_stage_propagation(
 
     return output_path
 
+def create_lstm_prediction_request(
+    major_events: pd.DataFrame,
+    days_before: float,
+    days_after: float,
+) -> pd.DataFrame:
+    """
+    Create complete UTC-day prediction windows for LSTM evaluation.
 
+    The requested start is floored to 00:00 UTC.
+    The requested end is ceiled to 00:00 UTC of the next day when needed.
+    """
+
+    request = major_events[
+        [
+            "duration_rank",
+            "start_time",
+            "end_time",
+            "duration_hours",
+            "peak_stage_ft",
+        ]
+    ].copy()
+
+    request = request.rename(
+        columns={
+            "duration_rank": "event_rank",
+            "start_time": "major_event_start_utc",
+            "end_time": "major_event_end_utc",
+            "duration_hours": "major_event_duration_hours",
+            "peak_stage_ft": "observed_peak_stage_ft",
+        }
+    )
+
+    buffered_start = (
+        request["major_event_start_utc"]
+        - pd.to_timedelta(days_before, unit="D")
+    )
+
+    buffered_end = (
+        request["major_event_end_utc"]
+        + pd.to_timedelta(days_after, unit="D")
+    )
+
+    request["requested_prediction_start_utc"] = buffered_start.dt.floor("D")
+    request["requested_prediction_end_utc"] = buffered_end.dt.ceil("D")
+
+    request["target_site_id"] = TARGET_SITE_ID
+    request["forecast_frequency_hours"] = 12
+    request["forecast_horizon_hours"] = 12
+    request["prediction_timestep_hours"] = 1
+    request["input_history_hours"] = 12
+
+    column_order = [
+        "event_rank",
+        "target_site_id",
+        "major_event_start_utc",
+        "major_event_end_utc",
+        "major_event_duration_hours",
+        "observed_peak_stage_ft",
+        "requested_prediction_start_utc",
+        "requested_prediction_end_utc",
+        "input_history_hours",
+        "forecast_frequency_hours",
+        "forecast_horizon_hours",
+        "prediction_timestep_hours",
+    ]
+
+    return request[column_order]
 # ---------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------
@@ -1329,6 +1395,11 @@ def main() -> None:
         "\nMajor-stage events at target gauge "
         f"{TARGET_SITE_ID}, ranked longest to shortest:"
     )
+
+    lstm_prediction_request = create_lstm_prediction_request(
+        major_events=major_events,
+        days_before=args.days_before,
+        days_after=args.days_after,)
 
     print(
         major_events[
@@ -1466,6 +1537,22 @@ def main() -> None:
         OUTPUT_DIR / f"{output_tag}_target_observed_vs_nwm_hourly.csv"
     )
 
+    lstm_request_file = (
+        OUTPUT_DIR
+        / f"{TARGET_SITE_ID}_lstm_event_prediction_requests.csv"
+    )
+
+    lstm_prediction_request.to_csv(
+        lstm_request_file,
+        index=False,
+    )
+
+    print("\nLSTM prediction periods:")
+    print(
+        lstm_prediction_request.to_string(
+            index=False,
+        )
+    )
     major_events.to_csv(
         ranked_events_file,
         index=False,
@@ -1523,6 +1610,7 @@ def main() -> None:
     print(f"  USGS/NWM comparison: {target_comparison_file}")
     print(f"  Streamflow figure:   {streamflow_figure}")
     print(f"  Stage figure:        {stage_figure}")
+    print(f"  LSTM prediction request: {lstm_request_file}")
 
 
 if __name__ == "__main__":
