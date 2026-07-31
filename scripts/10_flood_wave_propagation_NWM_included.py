@@ -69,13 +69,16 @@ NWM_INPUT_DIR = ROOT / "data" / "processed" / "nwm" / "retrospective_gauge_heigh
 
 TARGET_REACH_ID = 3168766
 
+LSTM_FORECAST_FILE = (
+    ROOT / "data" / "processed" / "major_event_forecast_results.csv"
+)
+
 # Selected upstream main-stem and tributary gauges that are
 # hydrologically relevant to the target gauge during the analyzed events.
 # The target gauge is placed last in the subplot order.
 NETWORK_SITE_IDS = [
     "08194000",
     "08194500",
-    "08208000",
     TARGET_SITE_ID,
 ]
 
@@ -173,6 +176,17 @@ def parse_args() -> argparse.Namespace:
         ),
     )
 
+    parser.add_argument(
+        "--lstm-forecast-file",
+        type=Path,
+        default=LSTM_FORECAST_FILE,
+        help=(
+            "CSV containing LSTM stage forecasts by event_rank, "
+            "issue_time, and forecast_time. Default: "
+            "data/processed/major_event_forecast_results.csv"
+        ),
+    )
+
     return parser.parse_args()
 
 
@@ -255,6 +269,91 @@ def load_network_data(path: Path) -> pd.DataFrame:
     )
 
     return df
+
+
+def load_lstm_event_forecasts(
+    path: Path,
+    event_rank: int,
+    window_start: pd.Timestamp,
+    window_end: pd.Timestamp,
+) -> pd.DataFrame:
+    """Load LSTM forecast trajectories for the selected ranked event."""
+
+    if not path.exists():
+        raise FileNotFoundError(f"LSTM forecast file not found: {path}")
+
+    required_columns = [
+        "event_rank",
+        "issue_time",
+        "lead_hour",
+        "forecast_time",
+        "predicted_stage_ft",
+    ]
+
+    forecasts = pd.read_csv(
+        path,
+        usecols=required_columns,
+        low_memory=False,
+    )
+
+    forecasts["event_rank"] = pd.to_numeric(
+        forecasts["event_rank"],
+        errors="coerce",
+    )
+    forecasts["lead_hour"] = pd.to_numeric(
+        forecasts["lead_hour"],
+        errors="coerce",
+    )
+    forecasts["predicted_stage_ft"] = pd.to_numeric(
+        forecasts["predicted_stage_ft"],
+        errors="coerce",
+    )
+
+    for column in ["issue_time", "forecast_time"]:
+        forecasts[column] = pd.to_datetime(
+            forecasts[column],
+            errors="coerce",
+            utc=True,
+        )
+
+    available_ranks = sorted(
+        forecasts["event_rank"].dropna().astype(int).unique().tolist()
+    )
+    if event_rank not in available_ranks:
+        raise ValueError(
+            f"LSTM forecast file does not contain event rank {event_rank}. "
+            f"Available ranks: {available_ranks}"
+        )
+
+    event_forecasts = forecasts.loc[
+        forecasts["event_rank"].eq(event_rank)
+        & forecasts["lead_hour"].eq(1)
+        & forecasts["forecast_time"].between(
+            window_start,
+            window_end,
+            inclusive="both",
+        )
+    ].copy()
+
+    event_forecasts = (
+        event_forecasts.dropna(
+            subset=[
+                "issue_time",
+                "forecast_time",
+                "predicted_stage_ft",
+            ]
+        )
+        .sort_values(["issue_time", "forecast_time"])
+        .reset_index(drop=True)
+    )
+
+    if event_forecasts.empty:
+        raise ValueError(
+            f"No LSTM forecasts for event rank {event_rank} overlap "
+            f"{window_start} through {window_end}."
+        )
+
+    return event_forecasts
 
 
 # ---------------------------------------------------------------------
@@ -1121,6 +1220,7 @@ def plot_streamflow_propagation(
 def plot_stage_propagation(
     site_series: dict[str, pd.DataFrame],
     target_comparison: pd.DataFrame,
+    lstm_forecasts: pd.DataFrame,
     event_window: pd.DataFrame,
     peaks: pd.DataFrame,
     selected_event: pd.Series,
@@ -1156,7 +1256,6 @@ def plot_stage_propagation(
 
         if site_id == TARGET_SITE_ID:
             observed_stage = target_comparison["observed_gage_height_ft"].dropna()
-            nwm_stage = target_comparison["nwm_estimated_gage_height_ft"].dropna()
 
             axis.plot(
                 observed_stage.index,
@@ -1164,12 +1263,14 @@ def plot_stage_propagation(
                 linewidth=HYDROGRAPH_LINE_WIDTH,
                 label="USGS observed stage (hourly)",
             )
+
             axis.plot(
-                nwm_stage.index,
-                nwm_stage.values,
-                linewidth=HYDROGRAPH_LINE_WIDTH,
-                linestyle="--",
-                label="NWM-derived stage (USGS rating curve)",
+                lstm_forecasts["forecast_time"],
+                lstm_forecasts["predicted_stage_ft"],
+                color="#2CA02C",
+                linewidth=1.5,
+                alpha=0.85,
+                label="LSTM first-step forecast",
             )
         else:
             stage = series["gage_height_ft"].dropna()
@@ -1442,6 +1543,25 @@ def main() -> None:
         days_after=args.days_after,
     )
 
+    lstm_forecast_file = args.lstm_forecast_file.resolve()
+    lstm_forecasts = load_lstm_event_forecasts(
+        path=lstm_forecast_file,
+        event_rank=args.event_rank,
+        window_start=window_start,
+        window_end=window_end,
+    )
+
+    print(f"\nSelected LSTM forecast file: {lstm_forecast_file}")
+    print(
+        "LSTM forecasts for selected event:\n"
+        f"  Issue times:              "
+        f"{lstm_forecasts['issue_time'].nunique():,}\n"
+        f"  Forecast points:          {len(lstm_forecasts):,}\n"
+        f"  Forecast-time coverage:   "
+        f"{lstm_forecasts['forecast_time'].min()} through "
+        f"{lstm_forecasts['forecast_time'].max()}"
+    )
+
     if args.nwm_file is None:
         nwm_file = find_nwm_file_for_window(
             nwm_directory=NWM_INPUT_DIR,
@@ -1593,6 +1713,7 @@ def main() -> None:
     stage_figure = plot_stage_propagation(
         site_series=site_series,
         target_comparison=target_comparison,
+        lstm_forecasts=lstm_forecasts,
         event_window=event_window,
         peaks=peaks,
         selected_event=selected_event,
